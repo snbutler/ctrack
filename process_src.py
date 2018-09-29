@@ -7,67 +7,67 @@ from code         import interact
 from PyQt4        import uic
 from PyQt4.QtCore import *
 from PyQt4.QtGui  import *
-from PyQt4.QtSql  import *
 
-    def updateChangesets(self):
-        idx = self.ui.activitiesTable.currentIndex()
-        if idx.isValid():
-            idx = self.models["acts"].index(idx.row(), 0)
-            actID = self.models["acts"].data(idx)
+Ui_MainWindow, QtBaseClass = uic.loadUiType('ps.ui')
 
-            self.models["csets_sql"].setQuery(self.csets_query.format(actID))
-            self.models["csets"].clear()
-            self.models["csets"].setColumnCount(6)
-            root = self.models["csets"].invisibleRootItem()
+class MyApp(QMainWindow):
+    def __init__(self, filen):
+        super(MyApp, self).__init__()
+        self.ui = Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.tree = QStandardItemModel()
+        self.root = self.tree.invisibleRootItem()
 
-            i    = 0
-            cs0  = None
-            curr = None
-            print("{} records".format(self.models["csets_sql"].rowCount()))
-            while i < self.models["csets_sql"].rowCount():
-                rec = self.models["csets_sql"].record(i)
-                cs  = rec.value(4)
-                if cs != cs0:
-                    print("add {} to root".format(cs))
-                    cols = []
-                    for j in range(4):
-                        col = QStandardItem(str(rec.value(j)))
-                        col.setEditable(False)
-                        cols.append(col)
-                    root.appendRow(cols)
-                    curr = cols[0]
-                    cs0 = cs
+        with open(filen) as f:
+            parent = self.root
+            for l in f:
+            #print(parent, parent is self.root, parent.parent() is self.root if parent else None)
+            #print(parent, parent.parent() if parent else None)
+                if re.match("\s*\/\/{{{", l):
+                    #print("nest", l.strip())
+                    fold = QStandardItem(re.subn("\s*\/\/{{{\s*", "", l.strip())[0])
+                    parent.appendRow(fold)
+                    parent = fold
+                elif re.match("\s*\/\/}}}", l):
+                    #print("un-nest", l.strip())
+                    parent = parent.parent() if parent else self.root
+                    if not parent:
+                        parent = self.root
+                else:
+                    #print("append", l.strip())
+                    fold = QStandardItem(l.strip())
+                    parent.appendRow(fold)
+                    #print(parent)
 
-                cols = []
-                print( "add {} to cs".format([rec.value(j) for j in range(rec.count())]))
-                for j in range(5,rec.count()):
-                    col = QStandardItem(rec.value(j))
-                    col.setEditable(False)
-                    cols.append(col)
-                #rel = QStandardItem(cols)
-                curr.appendRow(cols)
-                i += 1
+        self.ui.treeView.setModel(self.tree)
 
-    def keyboardShortcuts(self):
-        QShortcut(QKeySequence("Ctrl+Q"), self, self.destroy)
+        idx = self.tree.index(0, 0)
+        try:
+            self.printNode(self.tree.index(0, 0))
+        except:
+            interact(local=locals())
+        interact(local=locals())
 
-def appendFold():
-    pass
+    def printNode(self, idx, level = 0):
+        #print("level: {}".format(level))
+        while idx.isValid() and idx.row() < self.tree.rowCount(idx.parent()):
+            #print("{} ({})".format(idx.row(), self.tree.rowCount(idx.parent())))
+            #interact(local=locals())
+            s = str(self.tree.data(idx).toString())
+            if not re.match("\s*---", s):
+                print(" "*level + s)
+                if self.tree.hasChildren(idx):
+                    self.printNode(idx.child(0,0), level+1)
+            idx = idx.sibling(idx.row()+1, 0)
+            #print("  will be {}".format(str(self.tree.data(idx).toString())))
+            #print("now {} {}".format(idx.row(), self.tree.rowCount(idx)))
+        
+
             
 if __name__ == '__main__':
-    with open(sys.argv[1]) as f:
-        tree = QStandardItemModel()
-        root = tree.invisibleRootItem()
-        
-        parent = root
-        for l in f:
-            if re.match("\s*\\\\{{{", l):
-                fold = QStandardItem(re.subn("\s*\\\\{{{\s*", "", l))
-                parent.append([fold])
-                parent = fold
-            elif re.match("\s*\\\\}}}", l):
-                parent = fold.parent()
-            else:
-                fold = QStandardItem(l)
-                parent.append([fold])
+    app = QApplication(sys.argv)
+    win = MyApp(sys.argv[1])
+    win.show()
+    #interact()
 
+    sys.exit(app.exec_())
